@@ -1,9 +1,11 @@
+import os
 from celery import Celery, group
 from datetime import datetime
 
 
-# 创建 Celery 实例
-celery_app = Celery('algo_test')
+# 创建 Celery 实例，从环境变量读取 Redis URL
+_redis_url = os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/0')
+celery_app = Celery('algo_test', broker=_redis_url, backend=_redis_url)
 
 
 def make_celery(app):

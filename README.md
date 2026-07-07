@@ -22,15 +22,47 @@
 | 任务队列 | Celery + Redis |
 | 认证 | Flask-Login (Session) |
 
+## 环境要求
+
+| 依赖 | 最低版本 | 说明 |
+|------|----------|------|
+| Docker | 20.10+ | 用于运行 MySQL 和 Redis 容器 |
+| Docker Compose | v2+ | 已内置于 Docker Desktop |
+| Python | 3.10+ | 后端运行环境 |
+| Node.js | 18+ | 前端构建环境 |
+| libxml2-dev / libxslt-dev | - | lxml 编译依赖（见下方说明） |
+
+### 系统依赖安装
+
+lxml 需要 C 库编译支持，在部署后端前安装：
+
+```bash
+# Ubuntu / Debian
+sudo apt install -y python3-venv libxml2-dev libxslt-dev
+
+# CentOS / RHEL
+sudo yum install -y python3-devel libxml2-devel libxslt-devel
+```
+
+> **WSL2 用户**：需先安装 [Docker Desktop](https://www.docker.com/products/docker-desktop/)，并在 Settings > Resources > WSL Integration 中启用当前发行版的集成。
+
 ## 快速开始
 
 ### 1. 启动基础设施
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
-启动 Redis (端口 6379) 和 MySQL (端口 3306)。
+启动 Redis (端口 6379) 和 MySQL (端口 3306)。等待 MySQL 就绪：
+
+```bash
+# 验证 MySQL 可用
+docker exec algo-test-mysql mysqladmin ping -h 127.0.0.1 -u root -proot123
+
+# 验证 Redis 可用
+docker exec algo-test-redis redis-cli ping
+```
 
 ### 2. 后端设置
 
@@ -111,16 +143,73 @@ RESULT_JSON: {"snr": 25.3, "thd": 0.001, "output_level": -3.2}
 
 ## 生产部署
 
-```bash
-# 后端
-export FLASK_ENV=production
-export SECRET_KEY=your-very-secret-key
-export MYSQL_PASSWORD=strong-password
+### 后端
 
-# 前端构建
+```bash
+export FLASK_ENV=production
+export SECRET_KEY=your-very-secret-key        # 必须修改
+export MYSQL_PASSWORD=strong-password          # 必须修改
+export MYSQL_HOST=your-mysql-host
+export REDIS_URL=redis://your-redis-host:6379/0
+```
+
+### 前端构建
+
+```bash
 cd frontend
 npm run build
 # 输出到 frontend/dist/，可配置 nginx 代理或由 Flask 托管静态文件
+```
+
+### 停止服务
+
+```bash
+docker compose down          # 停止并删除容器
+docker compose down -v       # 同时删除数据卷（会清除数据库数据）
+```
+
+## 常见问题
+
+### MySQL 容器启动失败：`unknown variable 'default-authentication-plugin'`
+
+MySQL 8.4 已移除 `--default-authentication-plugin` 参数。确保 `docker-compose.yml` 中的 command 不包含该选项：
+
+```yaml
+command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+```
+
+如已使用旧配置启动过，需清除数据卷后重建：
+
+```bash
+docker compose down -v
+docker compose up -d
+```
+
+### Python venv 创建失败：`ensurepip is not available`
+
+Debian/Ubuntu 系统需要安装 `python3-venv` 包：
+
+```bash
+sudo apt install -y python3-venv
+```
+
+### lxml 编译失败：`Please make sure the libxml2 and libxslt development packages are installed`
+
+```bash
+sudo apt install -y libxml2-dev libxslt-dev   # Ubuntu / Debian
+sudo yum install -y libxml2-devel libxslt-devel  # CentOS / RHEL
+```
+
+### `docker-compose` 命令未找到
+
+本项目使用 Docker Compose v2，命令为 `docker compose`（无连字符）。如需兼容旧版：
+
+```bash
+# 安装 docker-compose-plugin（Linux）
+sudo apt install docker-compose-plugin
+
+# 或使用 pip 安装旧版
+pip install docker-compose
 ```
 
 ## 项目结构

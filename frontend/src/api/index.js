@@ -14,8 +14,10 @@ api.interceptors.response.use(
     if (error.response) {
       const { status, data } = error.response
       if (status === 401) {
-        // 未登录，跳转登录页
-        window.location.href = '/login'
+        // 未登录，跳转登录页（已在登录页则不跳转，避免无限刷新）
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login'
+        }
         return Promise.reject(error)
       }
       if (data?.error) {
