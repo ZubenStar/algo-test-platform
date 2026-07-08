@@ -6,6 +6,21 @@ from werkzeug.security import generate_password_hash, check_password_hash
 db = SQLAlchemy()
 
 
+class RunStatus:
+    PENDING = 'pending'
+    RUNNING = 'running'
+    COMPLETED = 'completed'
+    FAILED = 'failed'
+
+
+class ResultStatus:
+    PENDING = 'pending'
+    RUNNING = 'running'
+    PASSED = 'passed'
+    FAILED = 'failed'
+    ERROR = 'error'
+
+
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
 
@@ -112,8 +127,8 @@ class TestRun(db.Model):
     __tablename__ = 'test_runs'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    svn_revision_id = db.Column(db.Integer, db.ForeignKey('svn_revisions.id'), nullable=True)
-    status = db.Column(db.String(20), default='pending')  # pending/running/completed/failed
+    svn_revision_id = db.Column(db.Integer, db.ForeignKey('svn_revisions.id'), nullable=True, index=True)
+    status = db.Column(db.String(20), default=RunStatus.PENDING)
     started_at = db.Column(db.DateTime)
     finished_at = db.Column(db.DateTime)
     total_tasks = db.Column(db.Integer, default=0)
@@ -150,10 +165,10 @@ class TestResult(db.Model):
     __tablename__ = 'test_results'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    test_run_id = db.Column(db.Integer, db.ForeignKey('test_runs.id'), nullable=False)
-    algorithm_id = db.Column(db.Integer, db.ForeignKey('algorithms.id'), nullable=False)
-    core_id = db.Column(db.Integer, db.ForeignKey('cores.id'), nullable=False)
-    status = db.Column(db.String(20), default='pending')
+    test_run_id = db.Column(db.Integer, db.ForeignKey('test_runs.id'), nullable=False, index=True)
+    algorithm_id = db.Column(db.Integer, db.ForeignKey('algorithms.id'), nullable=False, index=True)
+    core_id = db.Column(db.Integer, db.ForeignKey('cores.id'), nullable=False, index=True)
+    status = db.Column(db.String(20), default=ResultStatus.PENDING)
     output_file = db.Column(db.String(500))
     result_data = db.Column(db.JSON)
     pass_count = db.Column(db.Integer, default=0)
@@ -194,8 +209,8 @@ class ConsistencyReport(db.Model):
     __tablename__ = 'consistency_reports'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    test_run_id = db.Column(db.Integer, db.ForeignKey('test_runs.id'), nullable=False)
-    algorithm_id = db.Column(db.Integer, db.ForeignKey('algorithms.id'), nullable=False)
+    test_run_id = db.Column(db.Integer, db.ForeignKey('test_runs.id'), nullable=False, index=True)
+    algorithm_id = db.Column(db.Integer, db.ForeignKey('algorithms.id'), nullable=False, index=True)
     is_consistent = db.Column(db.Boolean)
     reference_core_id = db.Column(db.Integer, db.ForeignKey('cores.id'), nullable=True)
     details = db.Column(db.JSON)
@@ -214,5 +229,54 @@ class ConsistencyReport(db.Model):
             'reference_core': self.reference_core.to_dict() if self.reference_core else None,
             'details': self.details,
             'max_diff': self.max_diff,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class Notification(db.Model):
+    __tablename__ = 'notifications'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    type = db.Column(db.String(50), nullable=False, default='info')
+    message = db.Column(db.String(500), nullable=False)
+    is_read = db.Column(db.Boolean, default=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User', backref='notifications')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'type': self.type,
+            'message': self.message,
+            'is_read': self.is_read,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class AuditLog(db.Model):
+    __tablename__ = 'audit_logs'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
+    action = db.Column(db.String(80), nullable=False, index=True)
+    target_type = db.Column(db.String(80), nullable=False, index=True)
+    target_id = db.Column(db.String(80))
+    detail = db.Column(db.JSON)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    user = db.relationship('User', backref='audit_logs')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'username': self.user.username if self.user else None,
+            'action': self.action,
+            'target_type': self.target_type,
+            'target_id': self.target_id,
+            'detail': self.detail,
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }

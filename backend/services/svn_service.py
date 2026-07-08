@@ -2,6 +2,7 @@ import subprocess
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from models import db, SvnRevision
+from services.db_session import safe_commit
 
 
 class SvnService:
@@ -15,9 +16,9 @@ class SvnService:
         返回 (has_update, SvnRevision object or None)
         """
         try:
-            cmd = f'svn info --xml {self.repo_url}'
             result = subprocess.run(
-                cmd, shell=True, capture_output=True, text=True, timeout=30
+                ['svn', 'info', '--xml', self.repo_url],
+                shell=False, capture_output=True, text=True, timeout=30
             )
             if result.returncode != 0:
                 print(f"SVN info failed: {result.stderr}")
@@ -42,8 +43,8 @@ class SvnService:
             log_msg = ''
             # svn info 不一定有 message，用 svn log 获取
             log_result = subprocess.run(
-                f'svn log -r {revision} --xml {self.repo_url}',
-                shell=True, capture_output=True, text=True, timeout=30
+                ['svn', 'log', '-r', revision, '--xml', self.repo_url],
+                shell=False, capture_output=True, text=True, timeout=30
             )
             if log_result.returncode == 0:
                 log_root = ET.fromstring(log_result.stdout)
@@ -65,7 +66,7 @@ class SvnService:
                 triggered_run=False,
             )
             db.session.add(svn_rev)
-            db.session.commit()
+            safe_commit()
 
             return True, svn_rev
 
@@ -79,9 +80,9 @@ class SvnService:
     def get_log_since(self, revision, limit=50):
         """获取指定 revision 以来的提交日志"""
         try:
-            cmd = f'svn log -r {revision}:HEAD --xml -l {limit} {self.repo_url}'
             result = subprocess.run(
-                cmd, shell=True, capture_output=True, text=True, timeout=30
+                ['svn', 'log', '-r', f'{revision}:HEAD', '--xml', '-l', str(limit), self.repo_url],
+                shell=False, capture_output=True, text=True, timeout=30
             )
             if result.returncode != 0:
                 return []

@@ -32,7 +32,11 @@
     </el-row>
 
     <!-- 报告列表 -->
-    <el-card shadow="hover" v-if="reports.length > 0">
+    <PageState
+      :empty="reports.length === 0"
+      :description="selectedRunId ? '该轮次暂无一致性报告' : '请先选择一个测试轮次'"
+    >
+    <el-card shadow="hover">
       <el-collapse v-model="activeNames">
         <el-collapse-item v-for="report in reports" :key="report.id" :name="report.id">
           <template #title>
@@ -97,9 +101,7 @@
         </el-collapse-item>
       </el-collapse>
     </el-card>
-
-    <el-empty v-else-if="selectedRunId" description="该轮次暂无一致性报告" />
-    <el-empty v-else description="请先选择一个测试轮次" />
+    </PageState>
   </div>
 </template>
 
@@ -107,6 +109,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '../api'
+import PageState from '../components/PageState.vue'
 
 const route = useRoute()
 

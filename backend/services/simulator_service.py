@@ -2,8 +2,19 @@ import subprocess
 import os
 import re
 import json
+import shlex
 from datetime import datetime
-from models import db, TestResult, Algorithm, Core
+from models import Algorithm, Core, ResultStatus, TestResult, db
+from services.db_session import safe_commit
+
+
+COMMAND_ARG_PATTERN = re.compile(r'^[a-zA-Z0-9/_.\-]+$')
+
+
+def validate_command_arg(value):
+    if not value or not COMMAND_ARG_PATTERN.fullmatch(value):
+        raise ValueError(f'非法命令参数: {value}')
+    return value
 
 
 class SimulatorService:
@@ -31,15 +42,15 @@ class SimulatorService:
         core = Core.query.get(core_id)
 
         if not algorithm or not core:
-            result.status = 'error'
+            result.status = ResultStatus.ERROR
             result.error_message = '算法或核配置不存在'
-            db.session.commit()
+            safe_commit()
             return result
 
         # 更新状态为 running
-        result.status = 'running'
+        result.status = ResultStatus.RUNNING
         result.started_at = datetime.utcnow()
-        db.session.commit()
+        safe_commit()
 
         try:
             # 构建仿真命令
@@ -54,7 +65,7 @@ class SimulatorService:
 
             # 执行仿真
             proc = subprocess.run(
-                cmd, shell=True, capture_output=True, text=True,
+                cmd, shell=False, capture_output=True, text=True,
                 timeout=self.timeout
             )
 
@@ -67,36 +78,37 @@ class SimulatorService:
             # 解析输出
             if proc.returncode == 0:
                 parsed = self.parse_output(proc.stdout)
-                result.status = 'passed' if parsed['fail_count'] == 0 else 'failed'
+                result.status = ResultStatus.PASSED if parsed['fail_count'] == 0 else ResultStatus.FAILED
                 result.result_data = parsed.get('data')
                 result.pass_count = parsed['pass_count']
                 result.fail_count = parsed['fail_count']
                 result.total_count = parsed['total_count']
             else:
-                result.status = 'failed'
+                result.status = ResultStatus.FAILED
                 result.error_message = proc.stderr[-2000:] if proc.stderr else f'Exit code: {proc.returncode}'
 
         except subprocess.TimeoutExpired:
-            result.status = 'error'
+            result.status = ResultStatus.ERROR
             result.error_message = f'仿真超时（{self.timeout}秒）'
         except Exception as e:
-            result.status = 'error'
+            result.status = ResultStatus.ERROR
             result.error_message = str(e)[:2000]
 
         result.finished_at = datetime.utcnow()
         if result.started_at:
             result.execution_time = (result.finished_at - result.started_at).total_seconds()
 
-        db.session.commit()
+        safe_commit()
         return result
 
     def _build_command(self, algorithm, core):
         """根据算法脚本路径和核的命令模板构建仿真命令"""
         if core.sim_cmd_template:
-            return core.sim_cmd_template.format(script=algorithm.script_path)
+            cmd = shlex.split(core.sim_cmd_template.format(script=algorithm.script_path))
         else:
             # 默认直接执行脚本
-            return f'python {algorithm.script_path}'
+            cmd = ['python', algorithm.script_path]
+        return [validate_command_arg(arg) for arg in cmd]
 
     def parse_output(self, output):
         """

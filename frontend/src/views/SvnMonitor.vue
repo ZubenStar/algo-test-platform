@@ -10,7 +10,8 @@
           </el-button>
         </div>
       </template>
-      <el-descriptions :column="3" border v-if="status.latest_revision">
+      <PageState :empty="!status.latest_revision" description="暂无 SVN 版本记录">
+      <el-descriptions :column="3" border>
         <el-descriptions-item label="最新版本">
           <el-tag type="primary">r{{ status.latest_revision.revision }}</el-tag>
         </el-descriptions-item>
@@ -26,7 +27,7 @@
           {{ status.latest_revision.message || '-' }}
         </el-descriptions-item>
       </el-descriptions>
-      <el-empty v-else description="暂无 SVN 版本记录" />
+      </PageState>
     </el-card>
 
     <!-- 提交历史 -->
@@ -64,6 +65,7 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import api from '../api'
+import PageState from '../components/PageState.vue'
 
 const status = ref({})
 const history = ref([])

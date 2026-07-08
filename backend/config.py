@@ -1,14 +1,21 @@
 import os
 
 
+def required_env(name):
+    value = os.environ.get(name)
+    if not value:
+        raise RuntimeError(f'{name} must be set')
+    return value
+
+
 class Config:
-    SECRET_KEY = os.environ.get('SECRET_KEY', 'algo-test-platform-secret-key-change-in-production')
+    SECRET_KEY = required_env('SECRET_KEY')
 
     # MySQL
     MYSQL_HOST = os.environ.get('MYSQL_HOST', '127.0.0.1')
     MYSQL_PORT = int(os.environ.get('MYSQL_PORT', 3306))
     MYSQL_USER = os.environ.get('MYSQL_USER', 'root')
-    MYSQL_PASSWORD = os.environ.get('MYSQL_PASSWORD', 'root123')
+    MYSQL_PASSWORD = required_env('MYSQL_PASSWORD')
     MYSQL_DB = os.environ.get('MYSQL_DB', 'algo_test')
     SQLALCHEMY_DATABASE_URI = (
         f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}"
@@ -20,6 +27,7 @@ class Config:
     REDIS_URL = os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/0')
     CELERY_BROKER_URL = REDIS_URL
     CELERY_RESULT_BACKEND = REDIS_URL
+    RATELIMIT_STORAGE_URI = REDIS_URL
 
     # SVN
     SVN_REPO_URL = os.environ.get('SVN_REPO_URL', 'svn://your-server/repo')
@@ -36,7 +44,7 @@ class Config:
 
     # Default admin
     DEFAULT_ADMIN_USERNAME = 'admin'
-    DEFAULT_ADMIN_PASSWORD = 'admin123'
+    DEFAULT_ADMIN_PASSWORD = required_env('ADMIN_PASSWORD')
 
 
 class DevelopmentConfig(Config):

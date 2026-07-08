@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app import create_app
 from models import db, User, Algorithm, Core
+from services.db_session import safe_commit
 
 
 def init_database():
@@ -27,7 +28,7 @@ def init_database():
             )
             admin.set_password(app.config['DEFAULT_ADMIN_PASSWORD'])
             db.session.add(admin)
-            db.session.commit()
+            safe_commit()
             print(f"[OK] 默认管理员已创建: {admin.username} / {app.config['DEFAULT_ADMIN_PASSWORD']}")
             print("     首次登录后请修改密码！")
         else:
@@ -60,7 +61,7 @@ def init_database():
             db.session.add_all(sample_cores)
             print(f"[OK] 已插入 {len(sample_cores)} 个示例核")
 
-        db.session.commit()
+        safe_commit()
         print("\n[OK] 数据库初始化完成！")
 
 

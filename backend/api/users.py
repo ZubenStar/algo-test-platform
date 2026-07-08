@@ -2,6 +2,8 @@ from flask import Blueprint, jsonify, request
 from flask_login import login_required, current_user
 from models import db, User
 from decorators import admin_required
+from services.audit_service import audit_log
+from services.db_session import safe_commit
 
 users_bp = Blueprint('users', __name__)
 
@@ -17,6 +19,7 @@ def list_users():
 @users_bp.route('', methods=['POST'])
 @login_required
 @admin_required
+@audit_log('create', 'user')
 def create_user():
     data = request.get_json()
     username = data.get('username', '').strip()
@@ -38,7 +41,7 @@ def create_user():
     user = User(username=username, role=role)
     user.set_password(password)
     db.session.add(user)
-    db.session.commit()
+    safe_commit()
 
     return jsonify({'message': '用户创建成功', 'user': user.to_dict()}), 201
 
@@ -46,6 +49,7 @@ def create_user():
 @users_bp.route('/<int:user_id>', methods=['PUT'])
 @login_required
 @admin_required
+@audit_log('update', 'user')
 def update_user(user_id):
     user = User.query.get_or_404(user_id)
     data = request.get_json()
@@ -70,36 +74,41 @@ def update_user(user_id):
                 return jsonify({'error': f'用户名 {new_name} 已存在'}), 409
             user.username = new_name
 
-    db.session.commit()
+    safe_commit()
     return jsonify({'message': '更新成功', 'user': user.to_dict()})
 
 
 @users_bp.route('/<int:user_id>', methods=['DELETE'])
 @login_required
 @admin_required
+@audit_log('delete', 'user')
 def delete_user(user_id):
     if user_id == current_user.id:
         return jsonify({'error': '不能删除自己'}), 400
 
     user = User.query.get_or_404(user_id)
     db.session.delete(user)
-    db.session.commit()
+    safe_commit()
     return jsonify({'message': '用户已删除'})
 
 
 @users_bp.route('/<int:user_id>/reset-password', methods=['PUT'])
 @login_required
 @admin_required
+@audit_log('reset_password', 'user')
 def reset_password(user_id):
     user = User.query.get_or_404(user_id)
-    data = request.get_json()
-    new_password = data.get('new_password', 'admin123')
+    data = request.get_json(silent=True) or {}
+    new_password = data.get('new_password', '')
+
+    if not new_password:
+        return jsonify({'error': '新密码不能为空'}), 400
 
     if len(new_password) < 6:
         return jsonify({'error': '密码至少6位'}), 400
 
     user.set_password(new_password)
     user.force_change_password = True
-    db.session.commit()
+    safe_commit()
 
     return jsonify({'message': f'用户 {user.username} 密码已重置'})

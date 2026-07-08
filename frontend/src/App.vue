@@ -48,6 +48,10 @@
               <el-icon><Setting /></el-icon>
               <span>配置管理</span>
             </el-menu-item>
+            <el-menu-item index="/audit">
+              <el-icon><Document /></el-icon>
+              <span>审计日志</span>
+            </el-menu-item>
           </template>
         </el-menu>
       </el-aside>
@@ -57,6 +61,7 @@
         <el-header style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e8e8e8">
           <span style="font-size: 18px; font-weight: 500">{{ currentTitle }}</span>
           <div style="display: flex; align-items: center; gap: 16px">
+            <NotificationBell ref="notificationBellRef" />
             <span style="color: #666">{{ authStore.user?.username }}</span>
             <el-tag :type="authStore.isAdmin ? 'danger' : 'info'" size="small">
               {{ authStore.isAdmin ? '管理员' : '普通用户' }}
@@ -75,13 +80,16 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from './stores/auth'
+import NotificationBell from './components/NotificationBell.vue'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const notificationBellRef = ref(null)
+let notificationSource = null
 
 const titleMap = {
   '/': '仪表盘',
@@ -91,14 +99,34 @@ const titleMap = {
   '/tasks': '任务管理',
   '/users': '用户管理',
   '/config': '配置管理',
+  '/audit': '审计日志',
 }
 
 const currentTitle = computed(() => titleMap[route.path] || '算法单元测试平台')
 
 const handleLogout = async () => {
+  if (notificationSource) {
+    notificationSource.close()
+    notificationSource = null
+  }
   await authStore.logout()
   router.push('/login')
 }
+
+onMounted(() => {
+  if (route.path === '/login') return
+  notificationSource = new EventSource('/api/notifications/stream', { withCredentials: true })
+  notificationSource.onmessage = () => {
+    notificationBellRef.value?.incrementUnread()
+  }
+})
+
+onUnmounted(() => {
+  if (notificationSource) {
+    notificationSource.close()
+    notificationSource = null
+  }
+})
 </script>
 
 <style>

@@ -52,7 +52,7 @@
               </el-select>
             </div>
           </template>
-          <div v-if="matrixData.algorithms.length > 0">
+          <PageState :loading="matrixLoading" :empty="matrixData.algorithms.length === 0" description="暂无测试数据">
             <table class="matrix-table">
               <thead>
                 <tr>
@@ -78,8 +78,7 @@
                 </tr>
               </tbody>
             </table>
-          </div>
-          <el-empty v-else description="暂无测试数据" />
+          </PageState>
         </el-card>
       </el-col>
     </el-row>
@@ -99,15 +98,22 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, nextTick } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import api from '../api'
+import PageState from '../components/PageState.vue'
 
 const dashboard = ref({})
 const selectedRunId = ref(null)
 const recentRuns = ref([])
 const matrixData = reactive({ matrix: {}, algorithms: [], cores: [] })
+const matrixLoading = ref(false)
 const trendChartRef = ref(null)
+const chartInstance = ref(null)
+
+const resizeTrendChart = () => {
+  chartInstance.value?.resize()
+}
 
 const getStatusType = (status) => {
   const map = { passed: 'success', failed: 'danger', error: 'warning', running: '', pending: 'info' }
@@ -130,17 +136,25 @@ const loadRecentRuns = async () => {
 
 const loadMatrix = async () => {
   if (!selectedRunId.value) return
-  const res = await api.get(`/dashboard/matrix/${selectedRunId.value}`)
-  Object.assign(matrixData, res.data)
+  matrixLoading.value = true
+  try {
+    const res = await api.get(`/dashboard/matrix/${selectedRunId.value}`)
+    Object.assign(matrixData, res.data)
+  } finally {
+    matrixLoading.value = false
+  }
 }
 
 const loadTrend = async () => {
   const res = await api.get('/dashboard/trend', { params: { limit: 15 } })
   await nextTick()
   if (!trendChartRef.value) return
-  const chart = echarts.init(trendChartRef.value)
+  if (!chartInstance.value) {
+    chartInstance.value = echarts.init(trendChartRef.value)
+    window.addEventListener('resize', resizeTrendChart)
+  }
   const data = res.data.trend
-  chart.setOption({
+  chartInstance.value.setOption({
     tooltip: { trigger: 'axis' },
     xAxis: {
       type: 'category',
@@ -163,13 +177,20 @@ const loadTrend = async () => {
     }],
     grid: { left: 60, right: 30, bottom: 60, top: 30 },
   })
-  window.addEventListener('resize', () => chart.resize())
 }
 
 onMounted(() => {
   loadDashboard()
   loadRecentRuns()
   loadTrend()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', resizeTrendChart)
+  if (chartInstance.value) {
+    chartInstance.value.dispose()
+    chartInstance.value = null
+  }
 })
 </script>
 

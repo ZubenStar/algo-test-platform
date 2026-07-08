@@ -1,5 +1,6 @@
 import math
-from models import db, TestResult, ConsistencyReport, Core
+from models import ConsistencyReport, Core, ResultStatus, TestResult, db
+from services.db_session import safe_commit
 
 
 class ConsistencyService:
@@ -15,7 +16,7 @@ class ConsistencyService:
         results = TestResult.query.filter_by(
             test_run_id=test_run_id,
             algorithm_id=algorithm_id,
-        ).filter(TestResult.status.in_(['passed', 'failed'])).all()
+        ).filter(TestResult.status.in_([ResultStatus.PASSED, ResultStatus.FAILED])).all()
 
         if len(results) < 2:
             # 不足两个核的结果，无法比较
@@ -27,7 +28,7 @@ class ConsistencyService:
                 max_diff=None,
             )
             db.session.add(report)
-            db.session.commit()
+            safe_commit()
             return report
 
         # 选择参考核：优先 x86
@@ -80,7 +81,7 @@ class ConsistencyService:
             max_diff=max_diff,
         )
         db.session.add(report)
-        db.session.commit()
+        safe_commit()
         return report
 
     def _compute_diff(self, ref_data, cur_data):

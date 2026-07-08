@@ -1,7 +1,8 @@
 from flask import Blueprint, jsonify, request
 from flask_login import login_required
-from models import db, Algorithm, Core, TestRun, TestResult, SvnRevision, ConsistencyReport
-from sqlalchemy import func
+from models import Algorithm, Core, ResultStatus, RunStatus, SvnRevision, TestResult, TestRun, db
+from sqlalchemy import case, func
+from sqlalchemy.orm import joinedload
 
 dashboard_bp = Blueprint('dashboard', __name__)
 
@@ -13,7 +14,9 @@ def get_dashboard():
     core_count = Core.query.filter_by(is_active=True).count()
 
     # 最近一次测试运行
-    latest_run = TestRun.query.order_by(TestRun.id.desc()).first()
+    latest_run = TestRun.query.options(
+        joinedload(TestRun.svn_revision)
+    ).order_by(TestRun.id.desc()).first()
     latest_run_dict = latest_run.to_dict() if latest_run else None
 
     # 最近一次 SVN revision
@@ -24,7 +27,7 @@ def get_dashboard():
     pass_rate = None
     if latest_run and latest_run.total_tasks > 0:
         passed = TestResult.query.filter_by(
-            test_run_id=latest_run.id, status='passed'
+            test_run_id=latest_run.id, status=ResultStatus.PASSED
         ).count()
         pass_rate = round(passed / latest_run.total_tasks * 100, 1)
 
@@ -41,7 +44,10 @@ def get_dashboard():
 @login_required
 def get_matrix(run_id):
     """获取算法×核的矩阵数据"""
-    results = TestResult.query.filter_by(test_run_id=run_id).all()
+    results = TestResult.query.options(
+        joinedload(TestResult.algorithm),
+        joinedload(TestResult.core),
+    ).filter_by(test_run_id=run_id).all()
 
     matrix = {}
     for r in results:
@@ -74,15 +80,24 @@ def get_matrix(run_id):
 def get_trend():
     """获取最近 N 次测试的通过率趋势"""
     limit = request.args.get('limit', 10, type=int)
-    runs = TestRun.query.filter_by(status='completed').order_by(
-        TestRun.id.desc()
-    ).limit(limit).all()
+    runs = TestRun.query.options(
+        joinedload(TestRun.svn_revision)
+    ).filter_by(status=RunStatus.COMPLETED).order_by(TestRun.id.desc()).limit(limit).all()
     runs.reverse()
+    run_ids = [run.id for run in runs]
+    passed_stats = {}
+    if run_ids:
+        passed_stats = dict(db.session.query(
+            TestResult.test_run_id,
+            func.sum(case((TestResult.status == ResultStatus.PASSED, 1), else_=0)),
+        ).filter(
+            TestResult.test_run_id.in_(run_ids)
+        ).group_by(TestResult.test_run_id).all())
 
     trend = []
     for run in runs:
         total = run.total_tasks
-        passed = TestResult.query.filter_by(test_run_id=run.id, status='passed').count()
+        passed = int(passed_stats.get(run.id) or 0)
         rate = round(passed / total * 100, 1) if total > 0 else 0
         trend.append({
             'run_id': run.id,

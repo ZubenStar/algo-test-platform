@@ -76,6 +76,11 @@ source venv/bin/activate
 # 安装依赖
 pip install -r requirements.txt
 
+# 配置必填密钥/密码（生产环境请使用高强度随机值）
+export SECRET_KEY=dev-secret-key
+export MYSQL_PASSWORD=root123
+export ADMIN_PASSWORD=admin123
+
 # 初始化数据库（创建表 + 默认管理员 + 示例数据）
 python scripts/init_db.py
 ```
@@ -103,7 +108,7 @@ npm run dev
 
 ### 5. 登录
 
-- 默认管理员: `admin` / `admin123`
+- 默认管理员: `admin` / `ADMIN_PASSWORD` 环境变量的值
 - 首次登录需修改密码
 
 ## 环境变量
@@ -111,10 +116,11 @@ npm run dev
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `FLASK_ENV` | development | 运行环境 |
+| `SECRET_KEY` | 必填 | Flask Session 加密密钥 |
 | `MYSQL_HOST` | 127.0.0.1 | MySQL 地址 |
 | `MYSQL_PORT` | 3306 | MySQL 端口 |
 | `MYSQL_USER` | root | MySQL 用户 |
-| `MYSQL_PASSWORD` | root123 | MySQL 密码 |
+| `MYSQL_PASSWORD` | 必填 | MySQL 密码 |
 | `MYSQL_DB` | algo_test | 数据库名 |
 | `REDIS_URL` | redis://127.0.0.1:6379/0 | Redis 地址 |
 | `SVN_REPO_URL` | - | SVN 仓库地址 |
@@ -123,6 +129,7 @@ npm run dev
 | `SIM_OUTPUT_DIR` | /tmp/sim_output | 仿真输出目录 |
 | `SIM_TIMEOUT` | 600 | 仿真超时(秒) |
 | `CONSISTENCY_THRESHOLD` | 1e-6 | 一致性阈值 |
+| `ADMIN_PASSWORD` | 必填 | 初始化默认管理员密码 |
 
 ## 仿真脚本规范
 

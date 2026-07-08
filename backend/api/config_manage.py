@@ -2,6 +2,8 @@ from flask import Blueprint, jsonify, request
 from flask_login import login_required
 from decorators import admin_required
 from models import db, Algorithm, Core
+from services.audit_service import audit_log
+from services.db_session import safe_commit
 
 config_bp = Blueprint('config', __name__)
 
@@ -17,6 +19,7 @@ def list_algorithms():
 @config_bp.route('/algorithms', methods=['POST'])
 @login_required
 @admin_required
+@audit_log('create', 'algorithm')
 def create_algorithm():
     data = request.get_json()
     name = data.get('name', '').strip()
@@ -33,13 +36,14 @@ def create_algorithm():
         description=data.get('description', ''),
     )
     db.session.add(algo)
-    db.session.commit()
+    safe_commit()
     return jsonify({'message': '创建成功', 'algorithm': algo.to_dict()}), 201
 
 
 @config_bp.route('/algorithms/<int:algo_id>', methods=['PUT'])
 @login_required
 @admin_required
+@audit_log('update', 'algorithm')
 def update_algorithm(algo_id):
     algo = Algorithm.query.get_or_404(algo_id)
     data = request.get_json()
@@ -53,17 +57,18 @@ def update_algorithm(algo_id):
     if 'is_active' in data:
         algo.is_active = data['is_active']
 
-    db.session.commit()
+    safe_commit()
     return jsonify({'message': '更新成功', 'algorithm': algo.to_dict()})
 
 
 @config_bp.route('/algorithms/<int:algo_id>', methods=['DELETE'])
 @login_required
 @admin_required
+@audit_log('delete', 'algorithm')
 def delete_algorithm(algo_id):
     algo = Algorithm.query.get_or_404(algo_id)
     db.session.delete(algo)
-    db.session.commit()
+    safe_commit()
     return jsonify({'message': '已删除'})
 
 
@@ -78,6 +83,7 @@ def list_cores():
 @config_bp.route('/cores', methods=['POST'])
 @login_required
 @admin_required
+@audit_log('create', 'core')
 def create_core():
     data = request.get_json()
     name = data.get('name', '').strip()
@@ -94,13 +100,14 @@ def create_core():
         sim_cmd_template=data.get('sim_cmd_template', ''),
     )
     db.session.add(core)
-    db.session.commit()
+    safe_commit()
     return jsonify({'message': '创建成功', 'core': core.to_dict()}), 201
 
 
 @config_bp.route('/cores/<int:core_id>', methods=['PUT'])
 @login_required
 @admin_required
+@audit_log('update', 'core')
 def update_core(core_id):
     core = Core.query.get_or_404(core_id)
     data = request.get_json()
@@ -114,15 +121,16 @@ def update_core(core_id):
     if 'is_active' in data:
         core.is_active = data['is_active']
 
-    db.session.commit()
+    safe_commit()
     return jsonify({'message': '更新成功', 'core': core.to_dict()})
 
 
 @config_bp.route('/cores/<int:core_id>', methods=['DELETE'])
 @login_required
 @admin_required
+@audit_log('delete', 'core')
 def delete_core(core_id):
     core = Core.query.get_or_404(core_id)
     db.session.delete(core)
-    db.session.commit()
+    safe_commit()
     return jsonify({'message': '已删除'})

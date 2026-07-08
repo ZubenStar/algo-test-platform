@@ -7,6 +7,21 @@ const api = axios.create({
   withCredentials: true,
 })
 
+function getCookie(name) {
+  const cookie = document.cookie
+    .split('; ')
+    .find((item) => item.startsWith(`${name}=`))
+  return cookie ? decodeURIComponent(cookie.split('=').slice(1).join('=')) : ''
+}
+
+api.interceptors.request.use((config) => {
+  const csrfToken = getCookie('csrf_token')
+  if (csrfToken) {
+    config.headers['X-CSRFToken'] = csrfToken
+  }
+  return config
+})
+
 // 响应拦截器
 api.interceptors.response.use(
   (response) => response,

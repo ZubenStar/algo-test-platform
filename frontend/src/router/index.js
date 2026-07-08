@@ -52,6 +52,11 @@ const routes = [
     name: 'ConfigManage',
     component: () => import('../views/ConfigManage.vue'),
   },
+  {
+    path: '/audit',
+    name: 'AuditLogs',
+    component: () => import('../views/AuditLogs.vue'),
+  },
 ]
 
 const router = createRouter({
@@ -78,7 +83,7 @@ router.beforeEach(async (to, from, next) => {
     next('/')
   } else {
     // 管理员页面权限检查
-    const adminPages = ['/users', '/config']
+    const adminPages = ['/users', '/config', '/audit']
     if (adminPages.includes(to.path) && !authStore.isAdmin) {
       next('/')
     } else {

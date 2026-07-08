@@ -1,8 +1,10 @@
 from flask import Blueprint, jsonify, request
 from flask_login import login_required, current_user
 from decorators import admin_required
-from models import db, TestRun, TestResult, Algorithm, Core, SvnRevision
-from datetime import datetime
+from models import ResultStatus, RunStatus, TestRun, TestResult
+from services.audit_service import audit_log
+from services.db_session import safe_commit
+from services.test_run_service import TestRunService
 
 tasks_bp = Blueprint('tasks', __name__)
 
@@ -10,38 +12,12 @@ tasks_bp = Blueprint('tasks', __name__)
 @tasks_bp.route('/trigger', methods=['POST'])
 @login_required
 @admin_required
+@audit_log('trigger', 'test_run')
 def trigger_run():
     """手动触发一轮完整测试"""
     from tasks.celery_tasks import trigger_full_test_run
 
-    # 创建一个虚拟的 SVN revision 记录（手动触发）
-    latest_svn = SvnRevision.query.order_by(SvnRevision.id.desc()).first()
-
-    run = TestRun(
-        svn_revision_id=latest_svn.id if latest_svn else None,
-        status='pending',
-        triggered_by='manual',
-        started_at=datetime.utcnow(),
-    )
-
-    algorithms = Algorithm.query.filter_by(is_active=True).all()
-    cores = Core.query.filter_by(is_active=True).all()
-    run.total_tasks = len(algorithms) * len(cores)
-
-    db.session.add(run)
-    db.session.commit()
-
-    # 创建所有测试结果记录
-    for algo in algorithms:
-        for core in cores:
-            result = TestResult(
-                test_run_id=run.id,
-                algorithm_id=algo.id,
-                core_id=core.id,
-                status='pending',
-            )
-            db.session.add(result)
-    db.session.commit()
+    run = TestRunService.create_run('manual')
 
     # 异步触发 Celery 任务
     trigger_full_test_run.delay(run.id)
@@ -56,7 +32,7 @@ def trigger_run():
 @login_required
 def get_running():
     runs = TestRun.query.filter(
-        TestRun.status.in_(['pending', 'running'])
+        TestRun.status.in_([RunStatus.PENDING, RunStatus.RUNNING])
     ).order_by(TestRun.id.desc()).all()
     return jsonify({'runs': [r.to_dict() for r in runs]})
 
@@ -70,17 +46,17 @@ def retry_failed(run_id):
 
     run = TestRun.query.get_or_404(run_id)
     failed_results = TestResult.query.filter_by(
-        test_run_id=run_id, status='failed'
+        test_run_id=run_id, status=ResultStatus.FAILED
     ).all()
 
     for r in failed_results:
-        r.status = 'pending'
+        r.status = ResultStatus.PENDING
         r.error_message = None
-    db.session.commit()
+    safe_commit()
 
-    run.status = 'running'
+    run.status = RunStatus.RUNNING
     run.failed_tasks = 0
-    db.session.commit()
+    safe_commit()
 
     for r in failed_results:
         run_single_test.delay(run_id, r.algorithm_id, r.core_id)
